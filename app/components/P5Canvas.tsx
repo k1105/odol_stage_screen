@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
-import p5 from 'p5';
+import {useEffect, useRef} from "react";
+import p5 from "p5";
 
 export default function P5Canvas() {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -11,12 +11,12 @@ export default function P5Canvas() {
     if (!canvasRef.current) return;
 
     const sketch = (p: p5) => {
-      let layersSlider: p5.Element;
-      let radiusSlider: p5.Element;
-      let spacingSlider: p5.Element;
-      let prevValues: any = {};
-      let activeLight: 'red' | 'yellow' | 'blue' = 'red';
-      let targetLight: 'red' | 'yellow' | 'blue' = 'red';
+      const LAYERS = 5;
+      const RADIUS_ACTIVE = 80;
+      const RADIUS_INACTIVE = 60;
+      const SPACING_FACTOR = 1.2;
+      let activeLight: "red" | "yellow" | "blue" | "none" = "none";
+      let targetLight: "red" | "yellow" | "blue" | "none" = "none";
       let transitionProgress: number = 1.0;
       let isAnimating: boolean = false;
 
@@ -25,32 +25,19 @@ export default function P5Canvas() {
         p.fill(0, 200, 255);
         p.stroke(0);
         p.strokeWeight(1);
-
-        p.createP('Layers');
-        layersSlider = p.createSlider(3, 20, 6, 1);
-        p.createP('Radius');
-        radiusSlider = p.createSlider(5, 50, 20, 1);
-        p.createP('Spacing Factor');
-        spacingSlider = p.createSlider(1.0, 2.0, 1.4, 0.05);
-
-        [layersSlider, radiusSlider, spacingSlider].forEach((sl: p5.Element) => {
-          sl.input(() => {
-            if (hasSliderChanged()) p.redraw();
-          });
-        });
-
-        storeCurrentValues();
       };
 
       p.keyPressed = () => {
-        let newLight: 'red' | 'yellow' | 'blue' | null = null;
+        let newLight: "red" | "yellow" | "blue" | "none" | null = null;
 
-        if (p.key === 'r' || p.key === 'R') {
-          newLight = 'red';
-        } else if (p.key === 'y' || p.key === 'Y') {
-          newLight = 'yellow';
-        } else if (p.key === 'b' || p.key === 'B') {
-          newLight = 'blue';
+        if (p.key === "r" || p.key === "R") {
+          newLight = "red";
+        } else if (p.key === "y" || p.key === "Y") {
+          newLight = "yellow";
+        } else if (p.key === "b" || p.key === "B") {
+          newLight = "blue";
+        } else if (p.key === "i" || p.key === "I") {
+          newLight = "none";
         }
 
         if (newLight && newLight !== targetLight) {
@@ -78,52 +65,109 @@ export default function P5Canvas() {
 
         const centerY = p.height / 2;
 
-        const lights: Array<{ color: 'blue' | 'yellow' | 'red'; index: number }> = [
-          { color: 'blue', index: 0 },
-          { color: 'yellow', index: 1 },
-          { color: 'red', index: 2 }
-        ];
+        const lights: Array<{color: "blue" | "yellow" | "red"; index: number}> =
+          [
+            {color: "blue", index: 0},
+            {color: "yellow", index: 1},
+            {color: "red", index: 2},
+          ];
+
+        const isAllInactive = targetLight === "none";
+        const wasAllInactive = activeLight === "none";
 
         let currentX = 0;
         for (const light of lights) {
           const wasActive = activeLight === light.color;
           const willBeActive = targetLight === light.color;
 
-          const activeCircleWidth = p.height;
-          const remainingWidth = p.width - activeCircleWidth;
-          const inactiveCircleWidth = remainingWidth / 2;
-
           let width: number;
           let brightness: number;
+          let circleRadius: number;
 
-          if (wasActive && !willBeActive) {
-            width = p.lerp(activeCircleWidth, inactiveCircleWidth, eased);
-            brightness = p.lerp(1.0, 0.0, eased);
-          } else if (!wasActive && willBeActive) {
-            width = p.lerp(inactiveCircleWidth, activeCircleWidth, eased);
-            brightness = p.lerp(0.0, 1.0, eased);
-          } else if (wasActive && willBeActive) {
-            width = activeCircleWidth;
-            brightness = 1.0;
-          } else {
-            width = inactiveCircleWidth;
+          if (isAllInactive && wasAllInactive) {
+            // 全てinactiveの状態が継続
+            width = p.width / 3;
             brightness = 0.0;
+            circleRadius = RADIUS_INACTIVE;
+          } else if (!wasAllInactive && isAllInactive) {
+            // アクティブな状態 → 全てinactive
+            const activeCircleWidth = p.height;
+            const remainingWidth = p.width - activeCircleWidth;
+            const inactiveCircleWidth = remainingWidth / 2;
+            const allInactiveWidth = p.width / 3;
+
+            if (wasActive) {
+              width = p.lerp(activeCircleWidth, allInactiveWidth, eased);
+              brightness = p.lerp(1.0, 0.0, eased);
+              circleRadius = p.lerp(RADIUS_ACTIVE, RADIUS_INACTIVE, eased);
+            } else {
+              width = p.lerp(inactiveCircleWidth, allInactiveWidth, eased);
+              brightness = 0.0;
+              circleRadius = RADIUS_INACTIVE;
+            }
+          } else if (wasAllInactive && !isAllInactive) {
+            // 全てinactive → アクティブな状態
+            const activeCircleWidth = p.height;
+            const remainingWidth = p.width - activeCircleWidth;
+            const inactiveCircleWidth = remainingWidth / 2;
+            const allInactiveWidth = p.width / 3;
+
+            if (willBeActive) {
+              width = p.lerp(allInactiveWidth, activeCircleWidth, eased);
+              brightness = p.lerp(0.0, 1.0, eased);
+              circleRadius = p.lerp(RADIUS_INACTIVE, RADIUS_ACTIVE, eased);
+            } else {
+              width = p.lerp(allInactiveWidth, inactiveCircleWidth, eased);
+              brightness = 0.0;
+              circleRadius = RADIUS_INACTIVE;
+            }
+          } else {
+            // 通常の色切り替え
+            const activeCircleWidth = p.height;
+            const remainingWidth = p.width - activeCircleWidth;
+            const inactiveCircleWidth = remainingWidth / 2;
+
+            if (wasActive && !willBeActive) {
+              width = p.lerp(activeCircleWidth, inactiveCircleWidth, eased);
+              brightness = p.lerp(1.0, 0.0, eased);
+              circleRadius = p.lerp(RADIUS_ACTIVE, RADIUS_INACTIVE, eased);
+            } else if (!wasActive && willBeActive) {
+              width = p.lerp(inactiveCircleWidth, activeCircleWidth, eased);
+              brightness = p.lerp(0.0, 1.0, eased);
+              circleRadius = p.lerp(RADIUS_INACTIVE, RADIUS_ACTIVE, eased);
+            } else if (wasActive && willBeActive) {
+              width = activeCircleWidth;
+              brightness = 1.0;
+              circleRadius = RADIUS_ACTIVE;
+            } else {
+              width = inactiveCircleWidth;
+              brightness = 0.0;
+              circleRadius = RADIUS_INACTIVE;
+            }
           }
 
           const centerX = currentX + width / 2;
 
-          drawPattern(p, centerX, centerY, width, light.color, brightness);
+          const isActive = brightness > 0.5;
+
+          drawPattern(
+            p,
+            centerX,
+            centerY,
+            width,
+            light.color,
+            brightness,
+            circleRadius,
+            isActive,
+            isAllInactive
+          );
 
           currentX += width;
         }
-
-        storeCurrentValues();
       };
 
       function easeInOutCubic(t: number): number {
-        return t < 0.5
-          ? 4 * t * t * t
-          : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       }
 
       function drawPattern(
@@ -131,64 +175,82 @@ export default function P5Canvas() {
         centerX: number,
         centerY: number,
         allocatedWidth: number,
-        color: 'blue' | 'yellow' | 'red',
-        brightness: number
+        color: "blue" | "yellow" | "red",
+        brightness: number,
+        radius: number,
+        isActive: boolean,
+        isAllInactive: boolean
       ) {
-        const layers = (layersSlider as any).value();
-        const radius = (radiusSlider as any).value();
-        const spacingFactor = (spacingSlider as any).value();
-
-        pg.noStroke();
+        const layers = LAYERS;
+        const spacingFactor = SPACING_FACTOR;
 
         let baseColor: [number, number, number];
-        if (color === 'blue') {
+        if (color === "blue") {
           baseColor = [0, 150, 255];
-        } else if (color === 'yellow') {
+        } else if (color === "yellow") {
           baseColor = [255, 220, 0];
         } else {
           baseColor = [255, 50, 50];
         }
 
-        const darkColor: [number, number, number] = [30, 30, 30];
-        const r = p.lerp(darkColor[0], baseColor[0], brightness);
-        const g = p.lerp(darkColor[1], baseColor[1], brightness);
-        const b = p.lerp(darkColor[2], baseColor[2], brightness);
-        pg.fill(r, g, b);
+        // 全てinactiveの時は横幅基準の正円、それ以外は縦100%
+        let patternSize: number;
+        let scaleX: number;
+        let scaleY: number;
 
-        const patternSize = p.height;
-        const scaleX = allocatedWidth / p.height;
-        const scaleY = 1;
+        if (isAllInactive) {
+          // 全てinactive: 横幅基準の正円
+          patternSize = allocatedWidth;
+          scaleX = 1;
+          scaleY = 1;
+        } else {
+          // 一つでもアクティブ: 縦100%で横方向に圧縮/拡大
+          patternSize = p.height;
+          scaleX = allocatedWidth / p.height;
+          scaleY = 1;
+        }
 
-        for (let i = 0; i < layers; i++) {
-          const circleRadius = p.map(i, 0, layers - 1, 0, patternSize / 2.2);
-          const circleSize = radius;
-          const circumference = p.TWO_PI * circleRadius;
-          const circlesPerLayer = p.max(6, p.floor(circumference / (circleSize * spacingFactor)));
+        // 小さい円を描画（アクティブ時のみ）
+        if (isActive) {
+          // アクティブ時は色付き
+          const r = p.lerp(0, baseColor[0], brightness);
+          const g = p.lerp(0, baseColor[1], brightness);
+          const b = p.lerp(0, baseColor[2], brightness);
+          pg.fill(r, g, b);
+          pg.noStroke();
 
-          for (let j = 0; j < circlesPerLayer; j++) {
-            const angle = p.TWO_PI * j / circlesPerLayer + (i % 2) * p.PI / circlesPerLayer;
-            const x = centerX + p.cos(angle) * circleRadius * scaleX;
-            const y = centerY + p.sin(angle) * circleRadius * scaleY;
+          for (let i = 0; i < layers; i++) {
+            const circleRadius = p.map(i, 0, layers - 1, 0, patternSize / 2.2);
+            const circleSize = radius;
+            const circumference = p.TWO_PI * circleRadius;
+            const circlesPerLayer = p.max(
+              6,
+              p.floor(circumference / (circleSize * spacingFactor))
+            );
 
-            pg.ellipse(x, y, circleSize, circleSize);
+            for (let j = 0; j < circlesPerLayer; j++) {
+              const angle =
+                (p.TWO_PI * j) / circlesPerLayer +
+                ((i % 2) * p.PI) / circlesPerLayer;
+              const x = centerX + p.cos(angle) * circleRadius * scaleX;
+              const y = centerY + p.sin(angle) * circleRadius * scaleY;
+
+              pg.ellipse(x, y, circleSize, circleSize);
+            }
           }
         }
-      }
 
-      function hasSliderChanged() {
-        return (
-          (layersSlider as any).value() !== prevValues.layers ||
-          (radiusSlider as any).value() !== prevValues.radius ||
-          (spacingSlider as any).value() !== prevValues.spacing
-        );
-      }
-
-      function storeCurrentValues() {
-        prevValues = {
-          layers: (layersSlider as any).value(),
-          radius: (radiusSlider as any).value(),
-          spacing: (spacingSlider as any).value()
-        };
+        // 非アクティブ時のみ白いアウトラインを描画
+        if (!isActive) {
+          pg.noFill();
+          pg.stroke(255);
+          pg.strokeWeight(3);
+          pg.push();
+          pg.translate(centerX, centerY);
+          pg.scale(scaleX, scaleY);
+          pg.ellipse(0, 0, (patternSize / 2.2) * 2, (patternSize / 2.2) * 2);
+          pg.pop();
+        }
       }
 
       p.windowResized = () => {
@@ -204,5 +266,5 @@ export default function P5Canvas() {
     };
   }, []);
 
-  return <div ref={canvasRef} style={{ width: '100%', height: '100%' }} />;
+  return <div ref={canvasRef} style={{width: "100%", height: "100%"}} />;
 }
