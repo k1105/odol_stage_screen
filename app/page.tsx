@@ -1,20 +1,15 @@
 "use client";
 
 import P5Canvas from "./components/P5Canvas";
-import {useState, useEffect} from "react";
+import {useEffect} from "react";
 
 export default function Home() {
-  const [controlWindow, setControlWindow] = useState<Window | null>(null);
-
   const openControlWindow = () => {
-    const newWindow = window.open(
+    window.open(
       "/control",
       "Control Window",
       "width=400,height=600,resizable=yes"
     );
-    if (newWindow) {
-      setControlWindow(newWindow);
-    }
   };
 
   useEffect(() => {
@@ -29,7 +24,6 @@ export default function Home() {
     return () => {
       window.removeEventListener("keypress", handleKeyPress);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
