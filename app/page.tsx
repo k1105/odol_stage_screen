@@ -1,7 +1,11 @@
 "use client";
 
-import P5Canvas from "./components/P5Canvas";
+import dynamic from "next/dynamic";
 import {useEffect} from "react";
+
+const P5Canvas = dynamic(() => import("./components/P5Canvas"), {
+  ssr: false,
+});
 
 export default function Home() {
   const openControlWindow = () => {
