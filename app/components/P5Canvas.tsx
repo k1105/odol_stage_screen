@@ -10,11 +10,28 @@ export default function P5Canvas() {
   useEffect(() => {
     if (!canvasRef.current) return;
 
+    // postMessageイベントリスナーの設定
+    const handleMessage = (event: MessageEvent) => {
+      // セキュリティ: 同じオリジンからのメッセージのみ受け付ける
+      if (event.origin !== window.location.origin) return;
+
+      if (event.data.type === "LIGHT_CHANGE") {
+        const light = event.data.light;
+        if (p5InstanceRef.current) {
+          // p5インスタンスにカスタムイベントを送信
+          const customEvent = new CustomEvent("lightChange", {detail: {light}});
+          window.dispatchEvent(customEvent);
+        }
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+
     const sketch = (p: p5) => {
-      const LAYERS = 5;
-      const RADIUS_ACTIVE = 80;
+      const LAYERS = 12;
+      const RADIUS_ACTIVE = 30;
       const RADIUS_INACTIVE = 60;
-      const SPACING_FACTOR = 1.2;
+      const SPACING_FACTOR = 1.5;
       let activeLight: "red" | "yellow" | "blue" | "none" = "none";
       let targetLight: "red" | "yellow" | "blue" | "none" = "none";
       let transitionProgress: number = 1.0;
@@ -25,28 +42,19 @@ export default function P5Canvas() {
         p.fill(0, 200, 255);
         p.stroke(0);
         p.strokeWeight(1);
+
+        // カスタムイベントリスナーを設定
+        window.addEventListener("lightChange", ((event: CustomEvent) => {
+          const newLight = event.detail.light;
+          if (newLight && newLight !== targetLight) {
+            targetLight = newLight;
+            transitionProgress = 0;
+            isAnimating = true;
+          }
+        }) as EventListener);
       };
 
-      p.keyPressed = () => {
-        let newLight: "red" | "yellow" | "blue" | "none" | null = null;
-
-        if (p.key === "r" || p.key === "R") {
-          newLight = "red";
-        } else if (p.key === "y" || p.key === "Y") {
-          newLight = "yellow";
-        } else if (p.key === "b" || p.key === "B") {
-          newLight = "blue";
-        } else if (p.key === "i" || p.key === "I") {
-          newLight = "none";
-        }
-
-        if (newLight && newLight !== targetLight) {
-          targetLight = newLight;
-          transitionProgress = 0;
-          isAnimating = true;
-          p.loop();
-        }
-      };
+      // キーボード操作は無効化（コントロールパネルからのみ操作）
 
       p.draw = () => {
         if (isAnimating) {
@@ -55,7 +63,7 @@ export default function P5Canvas() {
             transitionProgress = 1.0;
             activeLight = targetLight;
             isAnimating = false;
-            p.noLoop();
+            // アニメーション終了後はloopを停止しない（アクティブなアニメーションを継続）
           }
         }
 
@@ -212,11 +220,6 @@ export default function P5Canvas() {
 
         // 小さい円を描画（アクティブ時のみ）
         if (isActive) {
-          // アクティブ時は色付き
-          const r = p.lerp(0, baseColor[0], brightness);
-          const g = p.lerp(0, baseColor[1], brightness);
-          const b = p.lerp(0, baseColor[2], brightness);
-          pg.fill(r, g, b);
           pg.noStroke();
 
           for (let i = 0; i < layers; i++) {
@@ -235,7 +238,21 @@ export default function P5Canvas() {
               const x = centerX + p.cos(angle) * circleRadius * scaleX;
               const y = centerY + p.sin(angle) * circleRadius * scaleY;
 
-              pg.ellipse(x, y, circleSize, circleSize);
+              // ノイズとsinを使ったアニメーション（最適化版）
+              const time = p.millis() / 1000;
+              const noiseVal = p.noise(i / 10, j / 10, time);
+              const alpha = 255 * brightness * (0.5 / (noiseVal + 1));
+
+              const r = p.lerp(0, baseColor[0], brightness);
+              const g = p.lerp(0, baseColor[1], brightness);
+              const b = p.lerp(0, baseColor[2], brightness);
+              pg.fill(r, g, b, alpha);
+
+              // ランダムとsinを使ってちらつき効果
+              if (p.random() < 0.5 * (p.sin(p.millis() / 500) + 1)) {
+                const animatedSize = circleSize * (0.8 + 0.4 * noiseVal);
+                pg.ellipse(x, y, animatedSize, animatedSize);
+              }
             }
           }
         }
@@ -262,6 +279,7 @@ export default function P5Canvas() {
     p5InstanceRef.current = new p5(sketch, canvasRef.current);
 
     return () => {
+      window.removeEventListener("message", handleMessage);
       p5InstanceRef.current?.remove();
     };
   }, []);
